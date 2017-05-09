@@ -81,7 +81,7 @@ func main() {
 	ptrHost := flag.String("host", "REQUIRED", "This is the target host of the attack (IP Address)") // Create Host flag
 	ptrNumBytes := flag.Int("numbytes", 999999999, "This the number of bytes to try an allocate")    // create numBytes flag
 	ptrPort := flag.Int("port", 111, "This is the port RPC Bind is running on")                      // create Port flag
-	ptrLoop := flag.Int64("loop", 1, "The number of times to loop (max=5000000000000000000)")        // Create Loop Flag
+	ptrLoop := flag.Int64("loop", 1, "The number of times to loop (max=9223372036854775807)")        // Create Loop Flag
 
 	flag.Parse() // Parse all Flags
 
