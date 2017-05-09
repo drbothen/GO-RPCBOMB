@@ -11,31 +11,6 @@ import (
 	"time"
 )
 
-type rpcPayload struct {
-	xid         uint32
-	messageType uint32
-	RPCVer      uint32
-	program     uint32
-	programver  uint32
-	procedure   uint32
-	username    uint32
-	usernamelen uint32
-	cred        uint32
-	credlen     uint32
-	programzero uint32
-	ver         uint32
-	proc        uint32
-	arglen      uint32
-	memassign   uint32
-}
-
-type ImageHeader struct {
-	Signature   [3]byte
-	Version     uint32
-	IsGrayscale bool
-	NumSections uint32
-}
-
 func CheckError(err error) {
 	if err != nil {
 		fmt.Println("Error: ", err)
